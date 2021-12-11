@@ -5,7 +5,7 @@
 
 #include <json.h>
 
-std::string replicate_sql(
-    const std::string_view name, const jsonio::json& definition);
+std::string replicate_sql(const std::string& db_name,
+    const jsonio::json& definition, const jsonio::json& clients);
 
 #endif // SQLR_H
