@@ -391,11 +391,11 @@ set @qry = 'GRANT )" + operations + R"( ON `)" +
 )";
             sql_cmd += exec;
         }
-    }
-            sql_cmd += R"(
+        sql_cmd += R"(
 set @qry = concat('select \'', @client_password, '\' into OUTFILE \'',
     @@global.secure_file_priv, @client_user, '\';');
 )";
-    sql_cmd += exec;
+        sql_cmd += exec;
+    }
     return sql_cmd;
 }
