@@ -165,14 +165,18 @@ set @qry = if (@old_table = '',
 
     // Drop extra tables
     sql_cmd += R"(
-select group_concat(concat('DROP TABLE `)" + db_name +
-    R"(`.`', `TABLE_NAME`, '`;') SEPARATOR '')
+select group_concat(concat('`)" + db_name +
+    R"(`.`', `TABLE_NAME`, '`') SEPARATOR ', ')
     into @sub_query
     from `INFORMATION_SCHEMA`.`TABLES`
     where `TABLE_SCHEMA`= ')" + db_name +
     R"(' and `TABLE_TYPE` = 'BASE TABLE' and
         instr(@all_tables, concat('`', `TABLE_COMMENT`, '`')) = 0;
-set @qry = ifnull(@sub_query, 'SELECT 0;');
+set @qry = if (isnull(@sub_query),
+    'SELECT 0;'
+,
+    concat('DROP TABLE ', @sub_query, ';')
+);
 )";
     sql_cmd += exec;
 
