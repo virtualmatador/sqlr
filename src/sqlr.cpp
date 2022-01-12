@@ -150,7 +150,7 @@ select `TABLE_NAME` into @old_table
 set @qry = if (@old_table = '',
     'CREATE TABLE `)" + db_name + R"(`.`)" +
         bad_prefix + table["name"].get_string() + R"(` (`)" + bad_prefix +
-        R"(` int UNSIGNED NOT NULL) ENGINE=)" + table["engine"].get_string() + 
+        R"(` int UNSIGNED NOT NULL) ENGINE=)" + table["engine"].get_string() +
         R"( DEFAULT CHARSET=utf8 COMMENT \')" + table["id"].get_string() +
         R"(\';'
 ,
@@ -390,8 +390,8 @@ set @qry = concat('CREATE USER \'', @client_user,
             sql_cmd += R"(
 set @qry = 'GRANT )" + operations + R"( ON `)" +
     db_name + R"(`.`)" +
-    permission["subject"].get_string() + R"(` TO \\')" +
-    user + R"(\\';';
+    permission["subject"].get_string() + R"(` TO \')" +
+    user + R"(\';';
 )";
             sql_cmd += exec;
         }
