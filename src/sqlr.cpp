@@ -14,7 +14,7 @@ void sanitize(const std::string& input, const char* bad_chars)
 }
 
 std::string replicate_sql(const std::string& db_name,
-    const jsonio::json& definition, const jsonio::json& clients)
+    const jsonio::json& definition, const jsonio::json& clients, bool dry)
 {
     std::string bad_prefix{ "_sql_" };
     std::map<std::string, std::size_t> table_ids;
@@ -113,11 +113,21 @@ std::string replicate_sql(const std::string& db_name,
             }
         }
     }
-    std::string exec = R"(
+    std::string exec;
+    if (dry)
+    {
+        exec = R"(
+select @qry;
+)";
+    }
+    else
+    {
+        exec = R"(
 prepare stmt from @qry;
 execute stmt;
 deallocate prepare stmt;
 )";
+    }
 
     // Start Transaction
     std::string sql_cmd = "";
