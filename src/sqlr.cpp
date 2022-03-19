@@ -702,7 +702,8 @@ set @old_user = null;
 select `USER` into @old_user from `mysql`.`user`
 where `USER` = ')" + client["user"].get_string() + R"(';
 set @qry = if (isnull(@old_user),
-    concat('CREATE USER \')" + client["user"].get_string() + R"(\';')
+    concat('CREATE USER \')" + client["user"].get_string() +
+        R"(\' IDENTIFIED BY \'', MD5(RAND()), '\';')
 ,
     'SET @r = \'User ")" + client["user"].get_string() + R"(" exists.\';'
 );
