@@ -185,8 +185,8 @@ set @qry = if (isnull(@sub_query),
 
     // Apply table names
     sql += R"(
-set @rename_tables_prefix = '';
-set @rename_tables_final = '';
+set @ren_tables_prefix = '';
+set @ren_tables_final = '';
 )";
     for (const auto& table : definition.get_array())
     {
@@ -196,28 +196,28 @@ select `TABLE_NAME` into @old_table
     from `INFORMATION_SCHEMA`.`TABLES`
     where `TABLE_COMMENT` = ')" + table["id"].get_string() + R"(' and
         `TABLE_SCHEMA` = ')" + db_name + R"(';
-set @rename_tables_prefix = if (@old_table != ')" + table["name"].get_string() +
+set @ren_tables_prefix = if (@old_table != ')" + table["name"].get_string() +
     R"(' && instr(@old_table, ')" + bad_prefix + R"(') != 1,
-    concat(@rename_tables_prefix, '`)" + db_name +
+    concat(@ren_tables_prefix, '`)" + db_name +
         R"(`.`', @old_table, '` to `)" + db_name +
         R"(`.`)" + bad_prefix + table["name"].get_string() + R"(`, ')
 ,
-    @rename_tables_prefix
+    @ren_tables_prefix
 );
-set @rename_tables_final = if (@old_table != ')" + table["name"].get_string() +
+set @ren_tables_final = if (@old_table != ')" + table["name"].get_string() +
     R"(',
-    concat(@rename_tables_final, '`)" + db_name + R"(`.`)" + bad_prefix +
+    concat(@ren_tables_final, '`)" + db_name + R"(`.`)" + bad_prefix +
         table["name"].get_string() + R"(` to `)" + db_name + R"(`.`)" +
         table["name"].get_string() + R"(`, ')
 ,
-    @rename_tables_final
+    @ren_tables_final
 );
 )";
     }
     sql += R"(
-set @qry = if (@rename_tables_final != '',
-    if (@rename_tables_prefix != '', concat ('RENAME TABLE ',
-        substr(@rename_tables_prefix, 1, length(@rename_tables_prefix) - 2), ';')
+set @qry = if (@ren_tables_final != '',
+    if (@ren_tables_prefix != '', concat ('RENAME TABLE ',
+        substr(@ren_tables_prefix, 1, length(@ren_tables_prefix) - 2), ';')
     ,
         'SET @r = \'All tables have prefix.\';'
     ),
@@ -226,8 +226,8 @@ set @qry = if (@rename_tables_final != '',
 )";
     sql += exec;
     sql += R"(
-set @qry = if (@rename_tables_final != '', concat ('RENAME TABLE ',
-    substr(@rename_tables_final, 1, length(@rename_tables_final) - 2), ';')
+set @qry = if (@ren_tables_final != '', concat ('RENAME TABLE ',
+    substr(@ren_tables_final, 1, length(@ren_tables_final) - 2), ';')
 ,
     'SET @r = \'No table rename needed.\';');
 )";
@@ -311,8 +311,8 @@ set @qry = if (isnull(@sub_query),
 
         // Apply column names
         sql += R"(
-set @rename_columns_prefix = '';
-set @rename_columns_final = '';
+set @ren_columns_prefix = '';
+set @ren_columns_final = '';
 )";
         for (const auto& column : table["columns"].get_array())
         {
@@ -323,30 +323,30 @@ select `COLUMN_NAME` into @old_column
     where `COLUMN_COMMENT` = ')" + column["id"].get_string() + R"(' and
         `COLUMNS`.`TABLE_NAME` = ')" + table["name"].get_string() + R"(' and
         `COLUMNS`.`TABLE_SCHEMA` = ')" + db_name + R"(';
-set @rename_columns_prefix = if (@old_column != ')" +
+set @ren_columns_prefix = if (@old_column != ')" +
     column["name"].get_string() +
     R"(' && instr(@old_column, ')" + bad_prefix + R"(') != 1,
-    concat(@rename_columns_prefix, 'RENAME COLUMN `', @old_column, '` to `)" +
+    concat(@ren_columns_prefix, 'RENAME COLUMN `', @old_column, '` to `)" +
         bad_prefix + column["name"].get_string() + R"(`, ')
 ,
-    @rename_columns_prefix
+    @ren_columns_prefix
 );
-set @rename_columns_final = if (@old_column != ')" +
+set @ren_columns_final = if (@old_column != ')" +
     column["name"].get_string() + R"(',
-    concat(@rename_columns_final, 'RENAME COLUMN `)" + bad_prefix +
+    concat(@ren_columns_final, 'RENAME COLUMN `)" + bad_prefix +
         column["name"].get_string() + R"(` to `)" +
         column["name"].get_string() + R"(`, ')
 ,
-    @rename_columns_final
+    @ren_columns_final
 );
 )";
         }
         sql += R"(
-set @qry = if (@rename_columns_final != '',
-    if (@rename_columns_prefix != '',
+set @qry = if (@ren_columns_final != '',
+    if (@ren_columns_prefix != '',
         concat ('ALTER TABLE `)" + db_name + R"(`.`)" +
-        table["name"].get_string() + R"(` ', substr(@rename_columns_prefix, 1,
-        length(@rename_columns_prefix) - 2), ';')
+        table["name"].get_string() + R"(` ', substr(@ren_columns_prefix, 1,
+        length(@ren_columns_prefix) - 2), ';')
     ,
         'SET @r = \'All columns in ")" + table["name"].get_string() +
             R"(" have prefix.\';'
@@ -357,9 +357,9 @@ set @qry = if (@rename_columns_final != '',
 )";
         sql += exec;
         sql += R"(
-set @qry = if (@rename_columns_final != '', concat ('ALTER TABLE `)" + db_name +
+set @qry = if (@ren_columns_final != '', concat ('ALTER TABLE `)" + db_name +
         R"(`.`)" + table["name"].get_string() + R"(` ',
-    substr(@rename_columns_final, 1, length(@rename_columns_final) - 2), ';')
+    substr(@ren_columns_final, 1, length(@ren_columns_final) - 2), ';')
 ,
     'SET @r = \'No column in ")" + table["name"].get_string() +
             R"(" needs rename.\';');
@@ -510,14 +510,21 @@ set @ordinal_change = false;
             std::ostringstream ordinal_position;
             ordinal_position << 1 +
                 std::distance(&table["columns"].get_array().front(), &column);
+            auto null_j = column.get_value("null");
+            auto null_v = (null_j ? null_j->get_bool() : false);
+            auto default_j = column.get_value("default");
+            auto default_v = (default_j ? default_j->get_string() : "null");
+            auto auto_j = column.get_value("auto");
+            auto auto_v = (auto_j ? auto_j->get_bool() : false);
             sql += R"(
 set @old_type = null;
+set @old_default = null;
 set @old_null = null;
 set @old_auto = null;
 set @old_position = null;
-select `COLUMN_TYPE`, `IS_NULLABLE`, `EXTRA` like '%auto_increment%' as AUTO,
-    `ORDINAL_POSITION`
-    into @old_type, @old_null, @old_auto, @old_position
+select `COLUMN_TYPE`, `COLUMN_DEFAULT`, `IS_NULLABLE`,
+    `EXTRA` like '%auto_increment%' as AUTO, `ORDINAL_POSITION`
+    into @old_type, @old_default, @old_null, @old_auto, @old_position
     from `INFORMATION_SCHEMA`.`COLUMNS`
     where `COLUMN_NAME` = ')" + column["name"].get_string() + R"(' and
         `COLUMNS`.`TABLE_NAME` = ')" + table["name"].get_string() + R"(' and
@@ -526,12 +533,13 @@ set @ordinal_change = if (@old_position != )" + ordinal_position.str() +
     R"(, true, @ordinal_change);
 set @sub_query = if (@ordinal_change or
     @old_type != ')" + column["type"].get_string() + R"(' or
-    @old_null != ')" + (column["null"].get_bool() ? "YES" : "NO") + R"(' or
-    @old_auto != )" + (column["auto"].get_bool() ? "true" : "false") + R"(,
+    @old_default != ')" + default_v + R"(' or
+    @old_null != ')" + (null_v ? "YES" : "NO") + R"(' or
+    @old_auto != )" + (auto_v ? "true" : "false") + R"(,
     concat(@sub_query, 'MODIFY `)" + column["name"].get_string() + R"(` )" +
         column["type"].get_string() +
-        (column["null"].get_bool() ? " null" : " not null") +
-        (column["auto"].get_bool() ? " auto_increment" : "") +
+        (default_v != "null" ? " DEFAULT " + default_v : "") +
+        (null_v ? " null" : " not null") + (auto_v ? " auto_increment" : "") +
         R"( COMMENT \')" + column["id"].get_string() + R"(\' )" +
         order + R"(, ')
 ,
