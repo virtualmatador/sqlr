@@ -42,7 +42,7 @@ std::string replicate_sql(bool report, const std::string& db_name,
             }
             sanitize(column["type"].get_string(), "'`");
             sanitize(column["id"].get_string(), "'`");
-            auto default_value = column.get_value("default");
+            auto default_value = column.at("default");
             if (default_value)
             {
                 sanitize(default_value->get_string(), "'`");
@@ -52,7 +52,7 @@ std::string replicate_sql(bool report, const std::string& db_name,
                 throw std::runtime_error("Publish MySQL: Repeated Column Id");
             }
         }
-        auto keys = table.get_value("keys");
+        auto keys = table.at("keys");
         if (keys)
         {
             std::map<std::string, std::size_t> index_names;
@@ -80,7 +80,7 @@ std::string replicate_sql(bool report, const std::string& db_name,
                 }
             }
         }
-        auto foreign_keys = table.get_value("foreign-keys");
+        auto foreign_keys = table.at("foreign-keys");
         if (foreign_keys)
         {
             for (const auto& foreign_key : foreign_keys->get_array())
@@ -376,7 +376,7 @@ set @qry = if (@ren_columns_final != '', concat ('ALTER TABLE `)" + db_name +
         sql += R"(
 set @all_foreign_keys = '';
 )";
-        auto foreign_keys = table.get_value("foreign-keys");
+        auto foreign_keys = table.at("foreign-keys");
         if (foreign_keys)
         {
             for (const auto& key : foreign_keys->get_array())
@@ -510,11 +510,11 @@ set @ordinal_change = false;
             std::ostringstream ordinal_position;
             ordinal_position << 1 +
                 std::distance(&table["columns"].get_array().front(), &column);
-            auto null_j = column.get_value("null");
+            auto null_j = column.at("null");
             auto null_v = (null_j ? null_j->get_bool() : false);
-            auto default_j = column.get_value("default");
+            auto default_j = column.at("default");
             auto default_v = (default_j ? default_j->get_string() : "null");
-            auto auto_j = column.get_value("auto");
+            auto auto_j = column.at("auto");
             auto auto_v = (auto_j ? auto_j->get_bool() : false);
             sql += R"(
 set @old_type = null;
@@ -553,7 +553,7 @@ set @sub_query = if (@ordinal_change or
         sql += R"(
 set @all_keys = '';
 )";
-        auto keys = table.get_value("keys");
+        auto keys = table.at("keys");
         if (keys)
         {
             for (const auto& key : keys->get_array())
@@ -664,7 +664,7 @@ set @qry = if (isnull(@sub_query), 'SET @r = \'No extra table.\';',
     // Create foreign keys
     for (const auto& table : definition.get_array())
     {
-        auto foreign_keys = table.get_value("foreign-keys");
+        auto foreign_keys = table.at("foreign-keys");
         if (foreign_keys)
         {
             for (const auto& key : foreign_keys->get_array())
