@@ -172,7 +172,8 @@ select group_concat(concat('`)" + db_name + R"(`.`', `TABLE_NAME`, '` to `)" +
     R"(', `TABLE_NAME`, '`') SEPARATOR ', ')
     into @sub_query
     from `INFORMATION_SCHEMA`.`TABLES`
-    where `TABLE_SCHEMA` = ')" + db_name +
+    where `TABLE_NAME` not like ')" + bad_prefix + drop_prefix +
+    R"(%' and `TABLE_SCHEMA` = ')" + db_name +
     R"(' and `TABLE_TYPE` = 'BASE TABLE' and
         instr(@all_tables, concat('{', `TABLE_COMMENT`, '}')) = 0;
 set @qry = if (isnull(@sub_query),
@@ -297,7 +298,8 @@ select group_concat(concat('RENAME COLUMN `', `COLUMN_NAME`, '` to `)" +
     bad_prefix + drop_prefix + R"(', `COLUMN_NAME`, '`') SEPARATOR ', ')
     into @sub_query
     from `INFORMATION_SCHEMA`.`COLUMNS`
-    where `TABLE_SCHEMA` = ')" + db_name +
+    where `COLUMN_NAME` not like ')" + bad_prefix + drop_prefix +
+    R"(%' and `TABLE_SCHEMA` = ')" + db_name +
     R"(' and `TABLE_NAME` = ')" + table["name"].get_string() + R"(' and
         instr(@all_columns, concat('{', `COLUMN_COMMENT`, '}')) = 0;
 set @qry = if (isnull(@sub_query),
