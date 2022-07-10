@@ -478,7 +478,7 @@ set @qry = if (@old_ok or isnull(@old_constraint),
         // Remove extra foreign keys
         sql += R"(
 set @sub_query = null;
-select distinct group_concat(
+select group_concat(distinct
     concat('DROP FOREIGN KEY `', `CONSTRAINT_NAME`, '`') SEPARATOR ', ')
 into @sub_query
 from `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE`
@@ -601,7 +601,7 @@ set @sub_query = if (@drop_query != '' or isnull(@old_index),
         // Remove extra keys
         sql += R"(
 set @drop_query = null;
-select distinct group_concat(
+select group_concat(distinct
     concat('DROP INDEX `', `INDEX_NAME`, '`') SEPARATOR ', ')
 into @drop_query
 from `INFORMATION_SCHEMA`.`STATISTICS`
