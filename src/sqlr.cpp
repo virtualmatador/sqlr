@@ -19,8 +19,8 @@ std::string replicate_sql(bool report, const std::string& db_name,
 {
     std::string bad_prefix{ "_sql_" };
     std::string drop_prefix{ "_drop_" };
-    std::map<std::string, std::size_t> table_ids;
-    for (const auto& table : definition.get_array())
+    for (std::map<std::string, std::size_t> table_ids;
+        const auto& table : definition.get_array())
     {
         sanitize(table["name"].get_string(), "'`");
         if (table["name"].get_string().rfind(bad_prefix, 0) == 0)
@@ -32,8 +32,8 @@ std::string replicate_sql(bool report, const std::string& db_name,
         {
             throw std::runtime_error("Publish MySQL: Repeated Table Id");
         }
-        std::map<std::string, std::size_t> column_ids;
-        for (const auto& column : table["columns"].get_array())
+        for (std::map<std::string, std::size_t> column_ids;
+            const auto& column : table["columns"].get_array())
         {
             sanitize(column["name"].get_string(), "'`");
             if (column["name"].get_string().rfind(bad_prefix, 0) == 0)
@@ -42,8 +42,11 @@ std::string replicate_sql(bool report, const std::string& db_name,
             }
             sanitize(column["type"].get_string(), "'`");
             sanitize(column["id"].get_string(), "'`");
-            auto default_value = column.at("default");
-            if (default_value)
+            if (column["id"].get_string().empty())
+            {
+                throw std::runtime_error("Publish MySQL: Column No Id");
+            }
+            if (auto default_value = column.at("default"); default_value)
             {
                 sanitize(default_value->get_string(), "'`");
             }
@@ -52,8 +55,7 @@ std::string replicate_sql(bool report, const std::string& db_name,
                 throw std::runtime_error("Publish MySQL: Repeated Column Id");
             }
         }
-        auto keys = table.at("keys");
-        if (keys)
+        if (auto keys = table.at("keys"); keys)
         {
             std::map<std::string, std::size_t> index_names;
             for (const auto& key : keys->get_array())
@@ -80,8 +82,7 @@ std::string replicate_sql(bool report, const std::string& db_name,
                 }
             }
         }
-        auto foreign_keys = table.at("foreign-keys");
-        if (foreign_keys)
+        if (auto foreign_keys = table.at("foreign-keys"); foreign_keys)
         {
             for (const auto& foreign_key : foreign_keys->get_array())
             {
@@ -105,6 +106,41 @@ std::string replicate_sql(bool report, const std::string& db_name,
                 for (const auto& clm : foreign_key["keys"].get_array())
                 {
                     sanitize(clm.get_string(), "'`");
+                }
+            }
+        }
+        if (auto views = table.at("views"); views)
+        {
+            for (const auto& view : views->get_array())
+            {
+                sanitize(view["name"].get_string(), "'`");
+                for (const auto& clm : view["columns"].get_array())
+                {
+                    sanitize(clm.get_string(), "'`");
+                }
+                for (const auto& joint : view["joints"].get_array())
+                {
+                    if (const auto& type = joint["type"].get_string();
+                        type != "inner" &&
+                        type != "left outer" &&
+                        type != "right outer" )
+                    {
+                        throw std::runtime_error(
+                            "Publish MySQL: Bad Join Type");
+                    }
+                    sanitize(joint["table"].get_string(), "'`");
+                    sanitize(joint["as"].get_string(), "'`");
+                    for (const auto& on : joint["ons"].get_array())
+                    {
+                        sanitize(on["base"]["table"].get_string(), "'`");
+                        sanitize(on["base"]["column"].get_string(), "'`");
+                        sanitize(on["foreign"].get_string(), "'`");
+                    }
+                    for (const auto& clm : joint["columns"].get_array())
+                    {
+                        sanitize(clm["name"].get_string(), "'`");
+                        sanitize(clm["as"].get_string(), "'`");
+                    }
                 }
             }
         }
@@ -141,6 +177,7 @@ set @qry = if (isnull(@old_db),
     // Create tables with prefix
     sql += R"(
 set @all_tables = '';
+set @all_views = '';
 )";
     for (const auto& table : definition.get_array())
     {
@@ -161,8 +198,34 @@ set @qry = if (isnull(@old_table),
     'SET @r = \'Table ")" + table["name"].get_string() + R"(" exist.\';'
 );
 )";
+        if (auto views = table.at("views"); views)
+        {
+            for (const auto& view : views->get_array())
+            {
+                sql += R"(
+set @all_views = concat(@all_tables, '{)" + view["name"].get_string() + R"(}');
+)";
+            }
+        }
         sql += exec;
     }
+
+    // Remove extra views
+    sql += R"(
+set @sub_query = null;
+select group_concat(concat('`)" + db_name + R"(`.`', `TABLE_NAME`, '`') SEPARATOR ', ')
+    into @sub_query
+    from `INFORMATION_SCHEMA`.`TABLES`
+    where `TABLE_SCHEMA` = ')" + db_name +
+    R"(' and `TABLE_TYPE` = 'VIEW' and
+        instr(@all_views, concat('{', `TABLE_NAME`, '}')) = 0;
+set @qry = if (isnull(@sub_query),
+    'SET @r = \'No extra view.\';'
+,
+    concat('DROP VIEW ', @sub_query, ';')
+);
+)";
+    sql += exec;
 
     // Mark extra tables
     sql += R"(
@@ -378,8 +441,7 @@ set @qry = if (@ren_columns_final != '', concat ('ALTER TABLE `)" + db_name +
         sql += R"(
 set @all_foreign_keys = '';
 )";
-        auto foreign_keys = table.at("foreign-keys");
-        if (foreign_keys)
+        if (auto foreign_keys = table.at("foreign-keys"); foreign_keys)
         {
             for (const auto& key : foreign_keys->get_array())
             {
@@ -555,8 +617,7 @@ set @sub_query = if (@ordinal_change or
         sql += R"(
 set @all_keys = '';
 )";
-        auto keys = table.at("keys");
-        if (keys)
+        if (auto keys = table.at("keys"); keys)
         {
             for (const auto& key : keys->get_array())
             {
@@ -666,8 +727,7 @@ set @qry = if (isnull(@sub_query), 'SET @r = \'No extra table.\';',
     // Create foreign keys
     for (const auto& table : definition.get_array())
     {
-        auto foreign_keys = table.at("foreign-keys");
-        if (foreign_keys)
+        if (auto foreign_keys = table.at("foreign-keys"); foreign_keys)
         {
             for (const auto& key : foreign_keys->get_array())
             {
@@ -698,6 +758,67 @@ set @create_query = if (isnull(@old_constraint),
 set @qry = if (@create_query != '', @create_query,
     'SET @r = \'Foreign key ")" + key["name"].get_string() + R"(" is ok.\';');
 )";
+                sql += exec;
+            }
+        }
+    }
+
+    // Create views
+    for (const auto& table : definition.get_array())
+    {
+        if (auto views = table.at("views"); views)
+        {
+            for (const auto& view : views->get_array())
+            {
+                sql += R"(
+set @qry = 'CREATE OR REPLACE VIEW `)" + db_name + R"(`.`)" +
+    view["name"].get_string() + R"(` AS SELECT
+)";
+                std::string columns;
+                for (const auto& clm : view["columns"].get_array())
+                {
+                    if (!columns.empty())
+                    {
+                        columns += ", ";
+                    }
+                    columns += "`" + table["name"].get_string() + "`.`" +
+                        clm.get_string() + "`";
+                }
+                std::string from = R"( FROM `)" +
+                    db_name + R"(`.`)" + table["name"].get_string() + R"(` )";
+                for (const auto& joint : view["joints"].get_array())
+                {
+                    from += joint["type"].get_string() + R"( join `)" + db_name +
+                        R"(`.`)" + joint["table"].get_string() + R"(` AS `)" +
+                        joint["as"].get_string() + R"(` ON )";
+                    std::string ons;
+                    for (const auto& on : joint["ons"].get_array())
+                    {
+                        if (!ons.empty())
+                        {
+                            ons += "AND ";
+                        }
+                        ons += R"(`)" + db_name +
+                            R"(`.`)" + on["base"]["table"].get_string() +
+                            R"(`.`)" + on["base"]["column"].get_string() +
+                            R"(` = `)" + db_name +
+                            R"(`.`)" + joint["as"].get_string() +
+                            R"(`.`)" + on["foreign"].get_string() + R"(` )";
+                    }
+                    from += ons;
+                    for (const auto& clm : joint["columns"].get_array())
+                    {
+                        if (!columns.empty())
+                        {
+                            columns += ", ";
+                        }
+                        columns += R"(`)" + db_name + R"(`.`)" +
+                            joint["as"].get_string() + R"(`.`)" +
+                            clm["name"].get_string() + R"(` AS `)" +
+                            clm["as"].get_string() + "`";
+                    }
+                }
+                sql += columns + from + R"(;';)";
                 sql += exec;
             }
         }
