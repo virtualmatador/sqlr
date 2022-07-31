@@ -203,7 +203,7 @@ set @qry = if (isnull(@old_table),
             for (const auto& view : views->get_array())
             {
                 sql += R"(
-set @all_views = concat(@all_tables, '{)" + view["name"].get_string() + R"(}');
+set @all_views = concat(@all_views, '{)" + view["name"].get_string() + R"(}');
 )";
             }
         }
