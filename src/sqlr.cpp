@@ -571,9 +571,8 @@ set @ordinal_change = false;
         std::string order = "FIRST";
         for (const auto& column : table["columns"].get_array())
         {
-            std::ostringstream ordinal_position;
-            ordinal_position << 1 +
-                std::distance(&table["columns"].get_array().front(), &column);
+            auto ordinal_position{ std::to_string(1 + std::distance(
+                &table["columns"].get_array().front(), &column)) };
             auto null_j = column.at("null");
             auto null_v = (null_j ? null_j->get_bool() : false);
             auto default_j = column.at("default");
@@ -593,7 +592,7 @@ select `COLUMN_TYPE`, `COLUMN_DEFAULT`, `IS_NULLABLE`,
     where `COLUMN_NAME` = ')" + column["name"].get_string() + R"(' and
         `COLUMNS`.`TABLE_NAME` = ')" + table["name"].get_string() + R"(' and
         `COLUMNS`.`TABLE_SCHEMA` = ')" + db_name + R"(';
-set @ordinal_change = if (@old_position != )" + ordinal_position.str() +
+set @ordinal_change = if (@old_position != )" + ordinal_position +
     R"(, true, @ordinal_change);
 set @sub_query = if (@ordinal_change or
     @old_type != ')" + column["type"].get_string() + R"(' or
@@ -824,6 +823,56 @@ set @qry = 'CREATE OR REPLACE VIEW `)" + db_name + R"(`.`)" +
         }
     }
 
+    // Insert rows
+    for (const auto& table : definition.get_array())
+    {
+        if (auto rows = table.at("rows"); rows)
+        {
+            sql += R"(
+set @row_count = 0;
+SELECT COUNT(*) into @row_count FROM `)" + db_name + R"(`.`)" +
+    table["name"].get_string() + R"(`;
+)";
+            for (const auto& row : rows->get_array())
+            {
+                std::string values;
+                sql += R"(
+set @sub_query = 'INSERT `)" + db_name + R"(`.`)" + table["name"].get_string() +
+R"(`(
+)";
+                for (const auto& clm : row.get_object())
+                {
+                    if (!values.empty())
+                    {
+                        sql += ", ";
+                        values += ", ";
+                    }
+                    sql += '`' + clm.first + '`';
+                    for (const auto c : clm.second.get_string())
+                    {
+                        if (c == '\'')
+                        {
+                            values += "\\'";
+                        }
+                        else
+                        {
+                            values += c;
+                        }
+                    }
+                }
+                sql += ")VALUES(" + values + R"();';
+set @qry = if (@row_count != 0,
+    'SET @r = \'No rows inserted for ")" + table["name"].get_string() +
+        R"(".\';'
+,
+    @sub_query
+);
+)";
+                sql += exec;
+            }
+        }
+    }
+
     // Apply users
     std::size_t index = 0;
     for (const auto& client : clients.get_array())
@@ -840,17 +889,13 @@ set @qry = if (isnull(@old_user),
 );
 )";
         sql += exec;
-        sql += R"(
-set @all_grants = '';
-)";
+        sql += "set @all_grants = ' ";
         // Revoke extra permissions
         for (const auto& permission : client["permissions"].get_array())
         {
-            sql += R"(
-set @all_grants = concat(@all_grants, ')" +
-    permission["subject"].get_string() + R"( ');
-)";
+            sql += permission["subject"].get_string() + ' ';
         }
+        sql += "';";
         sql += R"(
 set @sub_query = null;
 select group_concat(concat('`', `table_name`, '`') separator ', ')
