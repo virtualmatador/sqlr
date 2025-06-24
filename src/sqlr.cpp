@@ -928,8 +928,8 @@ set @qry = if (isnull(@sub_query),
            client["user"].get_string() +
            R"(".\';'
 ,
-    'REVOKE ALL PRIVILEGES ON *.* FROM \')" +
-           client["user"].get_string() +
+    'REVOKE SELECT, INSERT, UPDATE, DELETE ON `)" +
+           db_name + R"(`.* FROM \')" + client["user"].get_string() +
            R"(\';'
 );
 )";
