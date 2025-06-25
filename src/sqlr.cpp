@@ -1,6 +1,8 @@
 #include <map>
 #include <sstream>
 
+#include <string.h>
+
 #include "sqlr.h"
 
 void sanitize(const std::string &input, const char *bad_chars) {
@@ -11,9 +13,10 @@ void sanitize(const std::string &input, const char *bad_chars) {
   }
 }
 
-std::string replicate_sql(bool report, const std::string &db_name,
+std::string replicate_sql(const std::string &db_name,
                           const jsonio::json &tables,
-                          const jsonio::json &clients) {
+                          const jsonio::json &clients, bool report,
+                          bool dry_run) {
   std::string bad_prefix{"_sql_"};
   std::string drop_prefix{"_drop_"};
   for (std::map<std::string, std::size_t> table_ids;
@@ -109,17 +112,20 @@ std::string replicate_sql(bool report, const std::string &db_name,
       }
     }
   }
+
   std::string exec;
   if (report) {
     exec += R"(
 select @qry as '';
 )";
   }
-  exec += R"(
+  if (!dry_run) {
+    exec += R"(
 prepare stmt from @qry;
 execute stmt;
 deallocate prepare stmt;
 )";
+  }
 
   // Start Transaction
   std::string sql = "";
@@ -131,7 +137,7 @@ select `SCHEMA_NAME` into @old_db from `INFORMATION_SCHEMA`.`SCHEMATA`
 where `SCHEMA_NAME` = ')" +
          db_name + R"(';
 set @qry = if (isnull(@old_db),
-    'CREATE DATABASE IF NOT EXISTS `)" +
+    'CREATE DATABASE `)" +
          db_name + R"(`;'
 ,
     'SET @r = \'Database ")" +
@@ -907,7 +913,7 @@ set @qry = if (isnull(@old_user),
 )";
     sql += exec;
     sql += "set @all_grants = ' ";
-    // Revoke extra permissions
+    // Revoke permissions of extra tables
     for (const auto &permission : client["permissions"].get_array()) {
       sql += permission["subject"].get_string() + ' ';
     }
@@ -928,21 +934,31 @@ set @qry = if (isnull(@sub_query),
            client["user"].get_string() +
            R"(".\';'
 ,
-    'REVOKE SELECT, INSERT, UPDATE, DELETE ON `)" +
+    'REVOKE IF EXISTS SELECT, INSERT, UPDATE, DELETE ON `)" +
            db_name + R"(`.* FROM \')" + client["user"].get_string() +
            R"(\';'
 );
 )";
     sql += exec;
 
-    // Grant permissions
+    // Adjust permissions
     for (const auto &permission : client["permissions"].get_array()) {
-      std::string operations;
-      for (const auto &operation : permission["operations"].get_array()) {
-        if (!operations.empty()) {
-          operations += ",";
+      std::string grant_operations, revoke_operations;
+      auto &permissions = permission["operations"].get_array();
+      for (auto operation : {"Select", "Insert", "Update", "Delete"}) {
+        if (std::find_if(permissions.begin(), permissions.end(), [&](auto &s) {
+              return strcasecmp(s.get_string().c_str(), operation) == 0;
+            }) != permissions.end()) {
+          if (!grant_operations.empty()) {
+            grant_operations += ",";
+          }
+          grant_operations += operation;
+        } else {
+          if (!revoke_operations.empty()) {
+            revoke_operations += ",";
+          }
+          revoke_operations += operation;
         }
-        operations += operation.get_string();
       }
       sql += R"(
 set @old_grant = null;
@@ -955,19 +971,39 @@ where
              client["user"].get_string() + R"(' and
     `table_name` = ')" +
              permission["subject"].get_string() + R"(';
+)";
+      if (!grant_operations.empty()) {
+        sql += R"(
 set @qry = if (@old_grant = ')" +
-             operations + R"(',
-    'SET @r = \'Permissions on ")" +
-             permission["subject"].get_string() + R"(" for ")" +
-             client["user"].get_string() + R"(" is ok.\';'
+               grant_operations + R"(',
+    'SET @r = \'Grant permissions on ")" +
+               permission["subject"].get_string() + R"(" for ")" +
+               client["user"].get_string() + R"(" is ok.\';'
 ,
-    'GRANT )" +
-             operations + R"( ON `)" + db_name + R"(`.`)" +
-             permission["subject"].get_string() + R"(` TO \')" +
-             client["user"].get_string() + R"(\';'
+    'GRANT )" + grant_operations +
+               R"( ON `)" + db_name + R"(`.`)" +
+               permission["subject"].get_string() + R"(` TO \')" +
+               client["user"].get_string() + R"(\';'
 );
 )";
-      sql += exec;
+        sql += exec;
+      }
+      if (!revoke_operations.empty()) {
+        sql += R"(
+set @qry = if (@old_grant = ')" +
+               grant_operations + R"(',
+    'SET @r = \'Revoke permissions on ")" +
+               permission["subject"].get_string() + R"(" for ")" +
+               client["user"].get_string() + R"(" is ok.\';'
+,
+    'REVOKE IF EXISTS )" +
+               revoke_operations + R"( ON `)" + db_name + R"(`.`)" +
+               permission["subject"].get_string() + R"(` FROM \')" +
+               client["user"].get_string() + R"(\';'
+);
+)";
+        sql += exec;
+      }
     }
   }
 

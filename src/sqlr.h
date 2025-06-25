@@ -5,8 +5,9 @@
 
 #include <json.hpp>
 
-std::string replicate_sql(bool report, const std::string &db_name,
+std::string replicate_sql(const std::string &db_name,
                           const jsonio::json &tables,
-                          const jsonio::json &clients);
+                          const jsonio::json &clients, bool report,
+                          bool dry_run);
 
 #endif // SQLR_H
