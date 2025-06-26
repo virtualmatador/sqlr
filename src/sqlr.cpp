@@ -587,13 +587,19 @@ set @ordinal_change = false;
     for (const auto &column : table["columns"].get_array()) {
       auto ordinal_position{std::to_string(
           1 + std::distance(&table["columns"].get_array().front(), &column))};
-      auto null_j = column.at("null");
-      auto null_v = (null_j ? null_j->get_bool() : false);
-      auto default_j = column.at("default");
-      auto default_v = (default_j ? default_j->get_string() : "null");
-      auto auto_j = column.at("auto");
-      auto auto_v = (auto_j ? auto_j->get_bool() : false);
-      sql += R"(
+      auto is_null = false;
+      if (auto column_null = column.at("null");
+          column_null && column_null->get_bool()) {
+        is_null = true;
+      }
+      auto default_value = column.at("default");
+      auto is_auto = false;
+      if (auto column_auto = column.at("auto");
+          column_auto && column_auto->get_bool()) {
+        is_auto = true;
+      };
+      sql +=
+          R"(
 set @old_type = null;
 set @old_default = null;
 set @old_null = null;
@@ -604,30 +610,32 @@ select `COLUMN_TYPE`, `COLUMN_DEFAULT`, `IS_NULLABLE`,
     into @old_type, @old_default, @old_null, @old_auto, @old_position
     from `INFORMATION_SCHEMA`.`COLUMNS`
     where `COLUMN_NAME` = ')" +
-             column["name"].get_string() + R"(' and
+          column["name"].get_string() + R"(' and
         `COLUMNS`.`TABLE_NAME` = ')" +
-             table["name"].get_string() + R"(' and
+          table["name"].get_string() + R"(' and
         `COLUMNS`.`TABLE_SCHEMA` = ')" +
-             db_name + R"(';
+          db_name + R"(';
 set @ordinal_change = if (@old_position != )" +
-             ordinal_position +
-             R"(, true, @ordinal_change);
+          ordinal_position +
+          R"(, true, @ordinal_change);
 set @sub_query = if (@ordinal_change or
     @old_type != ')" +
-             column["type"].get_string() + R"(' or
-    @old_default != ')" +
-             default_v + R"(' or
+          column["type"].get_string() + R"( or )" +
+          (default_value ? R"(@old_default IS NULL or @old_default != )" +
+                               default_value->get_string()
+                         : R"(@old_default IS NOT NULL)") +
+          R"(' or
     @old_null != ')" +
-             (null_v ? "YES" : "NO") + R"(' or
+          (is_null ? "YES" : "NO") + R"(' or
     @old_auto != )" +
-             (auto_v ? "true" : "false") + R"(,
+          (is_auto ? "true" : "false") + R"(,
     concat(@sub_query, 'MODIFY `)" +
-             column["name"].get_string() + R"(` )" +
-             column["type"].get_string() +
-             (default_v != "null" ? " DEFAULT " + default_v : "") +
-             (null_v ? " null" : " not null") +
-             (auto_v ? " auto_increment" : "") + R"( COMMENT \')" +
-             column["id"].get_string() + R"(\' )" + order + R"(, ')
+          column["name"].get_string() + R"(` )" + column["type"].get_string() +
+          (default_value ? " DEFAULT " + default_value->get_string() : "") +
+          (is_null ? " null" : " not null") +
+          (is_auto ? " auto_increment" : "") + R"( COMMENT \')" +
+          column["id"].get_string() + R"(\' )" + order +
+          R"(, ')
 ,
     @sub_query
 );
