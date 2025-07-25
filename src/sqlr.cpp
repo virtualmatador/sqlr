@@ -317,6 +317,7 @@ set @all_columns = '';
 set @sub_query = '';
 )";
     for (const auto &column : table["columns"].get_array()) {
+      auto default_value = column.at("default");
       sql += R"(
 set @all_columns = concat(@all_columns, '{)" +
              column["id"].get_string() +
@@ -332,8 +333,10 @@ select `COLUMN_NAME` into @old_column
              db_name + R"(';
 set @sub_query = if (isnull(@old_column),
     concat(@sub_query, 'ADD `)" +
-             bad_prefix + column["name"].get_string() +
-             R"(` int unsigned COMMENT \')" + column["id"].get_string() +
+             bad_prefix + column["name"].get_string() + R"(` )" +
+             column["type"].get_string() +
+             (default_value ? " DEFAULT " + default_value->get_string() : "") +
+             R"( COMMENT \')" + column["id"].get_string() +
              R"(\', ')
 ,
     @sub_query
@@ -620,11 +623,11 @@ set @ordinal_change = if (@old_position != )" +
           R"(, true, @ordinal_change);
 set @sub_query = if (@ordinal_change or
     @old_type != ')" +
-          column["type"].get_string() + R"( or )" +
-          (default_value ? R"(@old_default IS NULL or @old_default != )" +
+          column["type"].get_string() + R"(')" +
+          (default_value ? R"( or @old_default IS NULL or @old_default != )" +
                                default_value->get_string()
-                         : R"(@old_default IS NOT NULL)") +
-          R"(' or
+                         : "") +
+          R"( or
     @old_null != ')" +
           (is_null ? "YES" : "NO") + R"(' or
     @old_auto != )" +
@@ -735,6 +738,48 @@ set @sub_query = if (isnull(@drop_query), @sub_query,
     concat(@sub_query, @drop_query, ', ')
 );
 )";
+    sql += R"(
+set @qry = if (@sub_query != '',
+    concat ('ALTER TABLE `)" +
+           db_name + R"(`.`)" + table["name"].get_string() +
+           R"(` ', substr(@sub_query, 1, length(@sub_query) - 2), ';')
+,
+    'SET @r = \'Table ")" +
+           table["name"].get_string() + R"(" is ok.\';'
+);
+)";
+    sql += exec;
+  }
+
+  for (const auto &table : tables.get_array()) {
+    // remove extra defaults
+    sql += R"(
+set @sub_query = '';
+)";
+    for (const auto &column : table["columns"].get_array()) {
+      if (!column.at("default")) {
+        sql +=
+            R"(
+set @old_default = null;
+select `COLUMN_DEFAULT`
+    into @old_default
+    from `INFORMATION_SCHEMA`.`COLUMNS`
+    where `COLUMN_NAME` = ')" +
+            column["name"].get_string() + R"(' and
+        `COLUMNS`.`TABLE_NAME` = ')" +
+            table["name"].get_string() + R"(' and
+        `COLUMNS`.`TABLE_SCHEMA` = ')" +
+            db_name + R"(';
+set @sub_query = if (@old_default IS NOT NULL,
+    concat(@sub_query, 'ALTER COLUMN `)" +
+            column["name"].get_string() + R"(` DROP DEFAULT, ')
+,
+    @sub_query
+);
+)";
+      }
+    }
+
     sql += R"(
 set @qry = if (@sub_query != '',
     concat ('ALTER TABLE `)" +
