@@ -26,32 +26,41 @@ Example:
 
 ##### Table
 
-A table is a Json object in the root array of the database file. It has the following fields:
+A table is defined by a Json object in the root array of the database file. It has the following fields:
 
 | Field Name | Required | Type | Description |
 | --- | --- | --- | --- |
 | id | Yes | string | A GUID generated solely for this table |
 | name | Yes | string | The name of the table |
 | engine | No | string | The engine of the table |
-| columns | Yes | array | The list of columns in the table |
-| keys | No | array | The list of keys in the table |
-| foreign-keys | No | array | The list of foreign-keys referenced by the table |
+| columns | Yes | array | The columns in the table |
+| keys | No | array | The keys in the table |
+| foreign-keys | No | array | The foreign-keys in the table |
+| views | No | array | The views based on the table |
+| rows | No | array | The rows to initialize the table |
 
 Example:
 ```
 {
     "name": "user",
     "id": "93B099B08D144B40BCC918FA24831669",
+    "engine": "InnoDB",
     "columns": [
     ],
     "keys": [
+    ],
+    "foreign-keys": [
+    ],
+    "views": [
+    ],
+    "rows": [
     ]
 }
 ```
 
 ##### Column
 
-A column is a Json object in the `columns` array of the table. It has the following fields:
+A column is defined by a Json object in the `columns` array of the table. It has the following fields:
 
 | Field Name | Required | Type | Description |
 | --- | --- | --- | --- |
@@ -60,21 +69,23 @@ A column is a Json object in the `columns` array of the table. It has the follow
 | type | Yes | string | The type of the column |
 | auto | No | boolean | The column is auto generated or no |
 | null | No | boolean | The column accepts null values or no |
-| default | No | any | The default value for the column |
+| default | No | string | The default value for the column |
 
 Example:
 ```
 {
-    "name": "id",
     "id": "76AC03C95026487AB55A590C48FE4C8F",
+    "name": "id",
     "type": "int unsigned",
-    "auto": true
+    "auto": true,
+    "null": false,
+    "default": ""
 }
 ```
 
 #### Key
 
-A key is a Json object in the `keys` array of the table. It has the following fields:
+A key is defined by a Json object in the `keys` array of the table. It has the following fields:
 
 | Field Name | Required | Type | Description |
 | --- | --- | --- | --- |
@@ -95,7 +106,7 @@ Example:
 
 #### Foreign Key
 
-A foreign key is a Json object in the `foreign-keys` array of the table. It has the following fields:
+A foreign key is defined by a Json object in the `foreign-keys` array of the table. It has the following fields:
 
 | Field Name | Required | Type | Description |
 | --- | --- | --- | --- |
@@ -122,6 +133,91 @@ Example:
 }
 ```
 
+#### View
+
+A view is defined by a Json object in the `views` array of the table. It has the following fields:
+
+| Field Name | Required | Type | Description |
+| --- | --- | --- | --- |
+| name | Yes | string | The name of the view |
+| columns | Yes | array | The name of the columns joining the view |
+| joints | Yes | array | The joints in the view |
+
+Example:
+```
+{
+    "name": "membership",
+    "columns": [
+        "id"
+    ],
+    "joints": [
+    ]
+}
+```
+
+##### Joint
+
+A joint is defined by a Json object in the `joints` array of the view. It has the following fields:
+
+| Field Name | Required | Type | Description |
+| --- | --- | --- | --- |
+| table | Yes | string | The name of the table joining the view |
+| as | Yes | string | The alias for the table to be used in the view |
+| type | Yes | string | The type of the joint |
+| columns | Yes | array | The name of the columns of the table joining the view |
+| ons | Yes | array | The relations between this table and the rest of the view |
+
+Example:
+```
+{
+    "table": "project",
+    "as": "prj",
+    "type": "inner",
+    "columns": [
+      "id"
+    ],
+    "ons": [
+    ]
+}
+```
+
+###### Relation
+
+A relation is defined by a Json object in the `ons` array of the joint. It has the following fields:
+
+| Field Name | Required | Type | Description |
+| --- | --- | --- | --- |
+| foreign | Yes | string | The column used for comparison |
+| base | Yes | object | The table and the column to compare with |
+
+Example:
+```
+{
+  "foreign": "project",
+  "base": {
+    "table": "project",
+    "column": "id",
+  }
+}
+```
+
+#### Row
+
+A row is defined by a Json object in the `rows` array of the table. Its has the following fields:
+
+| Field Name | Required | Type | Description |
+| --- | --- | --- | --- |
+| <column name> | Yes | string | The value for the column |
+| ... | ... | ... | ... |
+
+Example:
+```
+{
+    "first_name": "John",
+    "last_name": "Smith"
+}
+```
+
 ### Permissions
 
 The permissions are optional and start with a simple Json array file.
@@ -134,7 +230,7 @@ Example:
 
 #### User
 
-A user is a Json object in the root array of the permissions file. It has the following fields:
+A user is defined by a Json object in the root array of the permissions file. It has the following fields:
 
 | Field Name | Required | Type | Description |
 | --- | --- | --- | --- |
@@ -152,7 +248,7 @@ Example:
 
 #### Permission
 
-A permission is a Json object in the `permissions` array of the user object. It has the following fields:
+A permission is defined by a Json object in the `permissions` array of the user object. It has the following fields:
 
 | Field Name | Required | Type | Description |
 | --- | --- | --- | --- |
