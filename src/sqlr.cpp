@@ -14,9 +14,8 @@ void sanitize(const std::string &input, const char *bad_chars) {
 }
 
 std::string replicate_sql(const std::string &db_name,
-                          const jsonio::json &tables,
-                          const jsonio::json &clients, bool report,
-                          bool dry_run) {
+                          const jsonio::json &tables, const jsonio::json &users,
+                          bool report, bool dry_run) {
   std::string bad_prefix{"_sql_"};
   std::string drop_prefix{"_drop_"};
   for (std::map<std::string, std::size_t> table_ids;
@@ -949,25 +948,25 @@ set @qry = if (@row_count != 0,
 
   // Apply users
   std::size_t index = 0;
-  for (const auto &client : clients.get_array()) {
+  for (const auto &user : users.get_array()) {
     sql += R"(
 set @old_user = null;
 select `USER` into @old_user from `mysql`.`user`
 where `USER` = ')" +
-           client["user"].get_string() + R"(';
+           user["name"].get_string() + R"(';
 set @qry = if (isnull(@old_user),
     concat('CREATE USER \')" +
-           client["user"].get_string() +
+           user["name"].get_string() +
            R"(\' IDENTIFIED BY \'', MD5(RAND()), '\';')
 ,
     'SET @r = \'User ")" +
-           client["user"].get_string() + R"(" exists.\';'
+           user["name"].get_string() + R"(" exists.\';'
 );
 )";
     sql += exec;
     sql += "set @all_grants = ' ";
     // Revoke permissions of extra tables
-    for (const auto &permission : client["permissions"].get_array()) {
+    for (const auto &permission : user["permissions"].get_array()) {
       sql += permission["subject"].get_string() + ' ';
     }
     sql += "';";
@@ -980,22 +979,22 @@ where
     `Db` = ')" +
            db_name + R"(' and
     `user` = ')" +
-           client["user"].get_string() + R"(' and
+           user["name"].get_string() + R"(' and
     instr(@all_grants, `table_name`) = 0;
 set @qry = if (isnull(@sub_query),
     'SET @r = \'No extra permissions for ")" +
-           client["user"].get_string() +
+           user["name"].get_string() +
            R"(".\';'
 ,
     'REVOKE IF EXISTS SELECT, INSERT, UPDATE, DELETE ON `)" +
-           db_name + R"(`.* FROM \')" + client["user"].get_string() +
+           db_name + R"(`.* FROM \')" + user["name"].get_string() +
            R"(\';'
 );
 )";
     sql += exec;
 
     // Adjust permissions
-    for (const auto &permission : client["permissions"].get_array()) {
+    for (const auto &permission : user["permissions"].get_array()) {
       std::string grant_operations, revoke_operations;
       auto &permissions = permission["operations"].get_array();
       for (auto operation : {"Select", "Insert", "Update", "Delete"}) {
@@ -1021,7 +1020,7 @@ where
     `Db` = ')" +
              db_name + R"(' and
     `user` = ')" +
-             client["user"].get_string() + R"(' and
+             user["name"].get_string() + R"(' and
     `table_name` = ')" +
              permission["subject"].get_string() + R"(';
 )";
@@ -1031,12 +1030,12 @@ set @qry = if (@old_grant = ')" +
                grant_operations + R"(',
     'SET @r = \'Grant permissions on ")" +
                permission["subject"].get_string() + R"(" for ")" +
-               client["user"].get_string() + R"(" is ok.\';'
+               user["name"].get_string() + R"(" is ok.\';'
 ,
     'GRANT )" + grant_operations +
                R"( ON `)" + db_name + R"(`.`)" +
                permission["subject"].get_string() + R"(` TO \')" +
-               client["user"].get_string() + R"(\';'
+               user["name"].get_string() + R"(\';'
 );
 )";
         sql += exec;
@@ -1047,12 +1046,12 @@ set @qry = if (@old_grant = ')" +
                grant_operations + R"(',
     'SET @r = \'Revoke permissions on ")" +
                permission["subject"].get_string() + R"(" for ")" +
-               client["user"].get_string() + R"(" is ok.\';'
+               user["name"].get_string() + R"(" is ok.\';'
 ,
     'REVOKE IF EXISTS )" +
                revoke_operations + R"( ON `)" + db_name + R"(`.`)" +
                permission["subject"].get_string() + R"(` FROM \')" +
-               client["user"].get_string() + R"(\';'
+               user["name"].get_string() + R"(\';'
 );
 )";
         sql += exec;

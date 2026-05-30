@@ -10,13 +10,18 @@ The benefits of using "Sqlr":
 How the magic happens:
 - Each table and column definition needs a GUID that shouldn't be changed through out the whole life of the project.
 
-## Input
+# Input
 
-Developers define database schema in some simple Json files.
+The following items are needed:
+- database name
+- tables definition json array file
+- users definition json array file
+- report flag to add informative logs to SQL output
+- dry-run flag to list required changes without applying them
 
-### Database
+## Tables
 
-The database starts with a simple Json array file.
+The tables are defined by an array of the table objects.
 
 Example:
 ```
@@ -24,20 +29,20 @@ Example:
 ]
 ```
 
-##### Table
+### Table
 
-A table is defined by a Json object in the root array of the database file. It has the following fields:
+A table is an object that has the following fields:
 
 | Field Name | Required | Type | Description |
 | --- | --- | --- | --- |
 | id | Yes | string | A GUID generated solely for this table |
 | name | Yes | string | The name of the table |
 | engine | No | string | The engine of the table |
-| columns | Yes | array | The columns in the table |
-| keys | No | array | The keys in the table |
-| foreign-keys | No | array | The foreign-keys in the table |
-| views | No | array | The views based on the table |
-| rows | No | array | The rows to initialize the table |
+| columns | Yes | array | The array of the column objects |
+| keys | No | array | The array of the key objects |
+| foreign-keys | No | array | The array of the foreign-key objects |
+| views | No | array | The array of the view objects |
+| rows | No | array | The array of the rows to initialize the table |
 
 Example:
 ```
@@ -58,9 +63,9 @@ Example:
 }
 ```
 
-##### Column
+#### Column
 
-A column is defined by a Json object in the `columns` array of the table. It has the following fields:
+A column is an object that has the following fields:
 
 | Field Name | Required | Type | Description |
 | --- | --- | --- | --- |
@@ -85,7 +90,7 @@ Example:
 
 #### Key
 
-A key is defined by a Json object in the `keys` array of the table. It has the following fields:
+A key is an object that has the following fields:
 
 | Field Name | Required | Type | Description |
 | --- | --- | --- | --- |
@@ -106,7 +111,7 @@ Example:
 
 #### Foreign Key
 
-A foreign key is defined by a Json object in the `foreign-keys` array of the table. It has the following fields:
+A foreign key is an object that has the following fields:
 
 | Field Name | Required | Type | Description |
 | --- | --- | --- | --- |
@@ -135,13 +140,13 @@ Example:
 
 #### View
 
-A view is defined by a Json object in the `views` array of the table. It has the following fields:
+A view is an object that has the following fields:
 
 | Field Name | Required | Type | Description |
 | --- | --- | --- | --- |
 | name | Yes | string | The name of the view |
 | columns | Yes | array | The name of the columns joining the view |
-| joints | Yes | array | The joints in the view |
+| joints | Yes | array | The array of the joint objects, joins of the view |
 
 Example:
 ```
@@ -157,7 +162,7 @@ Example:
 
 ##### Joint
 
-A joint is defined by a Json object in the `joints` array of the view. It has the following fields:
+A joint is an object that has the following fields:
 
 | Field Name | Required | Type | Description |
 | --- | --- | --- | --- |
@@ -165,7 +170,7 @@ A joint is defined by a Json object in the `joints` array of the view. It has th
 | as | Yes | string | The alias for the table to be used in the view |
 | type | Yes | string | The type of the joint |
 | columns | Yes | array | The name of the columns of the table joining the view |
-| ons | Yes | array | The relations between this table and the rest of the view |
+| ons | Yes | array | The array of the relation objects, between this table and the rest of the view |
 
 Example:
 ```
@@ -183,7 +188,7 @@ Example:
 
 ###### Relation
 
-A relation is defined by a Json object in the `ons` array of the joint. It has the following fields:
+A relation is an object that has the following fields:
 
 | Field Name | Required | Type | Description |
 | --- | --- | --- | --- |
@@ -203,7 +208,7 @@ Example:
 
 #### Row
 
-A row is defined by a Json object in the `rows` array of the table. Its has the following fields:
+A row is an object that has the following fields:
 
 | Field Name | Required | Type | Description |
 | --- | --- | --- | --- |
@@ -218,9 +223,9 @@ Example:
 }
 ```
 
-### Permissions
+## Users (optional)
 
-The permissions are optional and start with a simple Json array file.
+The users are defined by an array of the user objects.
 
 Example:
 ```
@@ -228,19 +233,19 @@ Example:
 ]
 ```
 
-#### User
+### User
 
-A user is defined by a Json object in the root array of the permissions file. It has the following fields:
+A user is an object that has the following fields:
 
 | Field Name | Required | Type | Description |
 | --- | --- | --- | --- |
-| user | Yes | string | The username |
-| permissions | Yes | array | The list of tables the user has access to |
+| name | Yes | string | The username |
+| permissions | Yes | array | The array of the permission objects |
 
 Example:
 ```
 {
-  "user": "Bob",
+  "name": "Bob",
   "permissions": [
   ]
 }
@@ -248,12 +253,12 @@ Example:
 
 #### Permission
 
-A permission is defined by a Json object in the `permissions` array of the user object. It has the following fields:
+A permission is an object that has the following fields:
 
 | Field Name | Required | Type | Description |
 | --- | --- | --- | --- |
 | subject | Yes | string | The name of the table |
-| operations | Yes | array | The list of operations the user can do on the table |
+| operations | Yes | array | The array of the operations that user is allowed to do on the table |
 
 Example:
 ```
@@ -268,17 +273,10 @@ Example:
 }
 ```
 
-### Remarks
-
-The GUID of the tables and columns shouldn't be changed through out the lifetime of the project. Changing them will cause data loss.
-
-## Output
-
-The tool is called with the following parameters:
-- database name
-- database definition json
-- permissions definition json
-- report flag to add informative logs to SQL output
-- dry-run flag to list required changes without applying them
+# Output
 
 The output is a SQL code that will apply required changes in a server.
+
+# Remarks
+
+The GUID of the tables and columns shouldn't be changed through out the lifetime of the project. Changing them will cause data loss.
