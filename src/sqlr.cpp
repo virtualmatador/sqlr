@@ -957,7 +957,7 @@ where `USER` = ')" +
 set @qry = if (isnull(@old_user),
     concat('CREATE USER \')" +
            user["name"].get_string() +
-           R"(\' IDENTIFIED BY \'', MD5(RAND()), '\';')
+           R"(\' ACCOUNT LOCK;')
 ,
     'SET @r = \'User ")" +
            user["name"].get_string() + R"(" exists.\';'

@@ -245,7 +245,7 @@ A user is an object that has the following fields:
 Example:
 ```
 {
-  "name": "Bob",
+  "name": "Alice",
   "permissions": [
   ]
 }
@@ -279,4 +279,5 @@ The output is a SQL code that will apply required changes in a server.
 
 # Remarks
 
-The GUID of the tables and columns shouldn't be changed through out the lifetime of the project. Changing them will cause data loss.
+- The GUID of the tables and columns shouldn't be changed through out the lifetime of the project. Changing them will cause data loss.
+- The account of the new users are locked to prevent unwanted access. After applying the output, admins need to alter new users to set password and unlock the accoutn. e.g. ALTER USER 'Alice' IDENTIFIED BY "${password_for_alice}" ACCOUNT UNLOCK;
